@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "../../lib/prisma.js";
 import { generateAccessToken, generateRefreshToken } from "../../lib/jwt.js";
 
+
 type RegisterData = {
   name: string;
   email: string;
@@ -95,5 +96,61 @@ export const loginUser = async (
 };
 
 
+export const refreshAccessToken = async (refreshToken: string) => {
+  const storedToken = await prisma.refreshToken.findUnique({
+    where: {
+      token: refreshToken,
+    },
+  });
 
+  if (!storedToken) {
+    throw new Error("Invalid refresh token");
+  }
 
+  if (storedToken.expiresAt < new Date()) {
+    await prisma.refreshToken.delete({
+      where: {
+        id: storedToken.id,
+      },
+    });
+
+    throw new Error("Refresh token has expired");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: storedToken.userId,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const accessToken = generateAccessToken(
+    user.id,
+    user.role,
+  );
+
+  return {
+    accessToken,
+  };
+};
+
+export const logoutUser = async (refreshToken: string) => {
+  const storedToken = await prisma.refreshToken.findUnique({
+    where: {
+      token: refreshToken,
+    },
+  });
+
+  if (!storedToken) {
+    throw new Error("Invalid refresh token");
+  }
+
+  await prisma.refreshToken.delete({
+    where: {
+      id: storedToken.id,
+    },
+  });
+};
